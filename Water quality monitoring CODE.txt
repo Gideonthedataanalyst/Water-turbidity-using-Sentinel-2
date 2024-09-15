@@ -1,0 +1,50 @@
+
+
+Map.centerObject(geometry);
+
+//sentinel images
+
+var sen = imageCollection.select(['B[2-4]','B8'])
+.filterDate('2023','2024')
+.filterBounds(geometry)
+.filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE',10))
+.median().multiply(0.0001);
+
+// false color composite
+Map.addLayer(sen.clip(geometry),
+      {bands:['B8','B4','B3']},'false color', false)
+
+
+// get ndwi
+var ndwi = sen.normalizedDifference(['B3','B8']).rename('ndwi');
+
+Map.addLayer(ndwi.clip(geometry),[],'ndwi',false);
+
+print(
+  ui.Chart.image.histogram(ndwi,geometry,100)
+  )
+// get threshold
+
+var thr = ndwi.gt(0.1);
+
+Map.addLayer(thr.clip(geometry),[],'thr',false)
+//apply sentinel mask showing water pixels
+
+var sen_mask = sen.updateMask(thr);
+Map.addLayer(sen_mask.clip(geometry),[],'sen_mask',false)
+
+var ndti = sen_mask.normalizedDifference(['B4','B3']).rename('ndti')
+
+Map.addLayer(ndti.clip(geometry),{
+  palette: ['blue','green','yellow','orange','red']
+  }, 'ndti', false)
+
+Export.image.toDrive({
+  image: ndti.clip(geometry),
+  description: 'sen2_ndti',
+  region: geometry,
+  scale: 10,
+  crs: ndti.getInfo().crs,
+  maxPixels: 1e13,
+  folder: 'turbidity'
+  })
